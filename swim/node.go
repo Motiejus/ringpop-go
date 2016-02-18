@@ -390,25 +390,25 @@ func (n *Node) Bootstrap(opts *BootstrapOptions) ([]string, error) {
 //
 //= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 
-func (n *Node) handleChanges(changes []Change) {
+func (n *Node) handleChanges(changes []Change, numPingable int) {
 	for _, change := range changes {
 		n.disseminator.RecordChange(change)
 
 		switch change.Status {
 		case Alive:
 			n.suspicion.Stop(change)
-			n.disseminator.AdjustMaxPropagations()
+			n.disseminator.AdjustMaxPropagations(numPingable)
 
 		case Faulty:
 			n.suspicion.Stop(change)
 
 		case Suspect:
 			n.suspicion.Start(change)
-			n.disseminator.AdjustMaxPropagations()
+			n.disseminator.AdjustMaxPropagations(numPingable)
 
 		case Leave:
 			n.suspicion.Stop(change)
-			n.disseminator.AdjustMaxPropagations()
+			n.disseminator.AdjustMaxPropagations(numPingable)
 		}
 	}
 }

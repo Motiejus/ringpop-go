@@ -57,10 +57,11 @@ type MemberlistChangesReceivedEvent struct {
 // node's memberlist as well as the previous and new checksums and the
 // number of members in the memberlist
 type MemberlistChangesAppliedEvent struct {
-	Changes     []Change `json:"changes"`
-	OldChecksum uint32   `json:"oldChecksum"`
-	NewChecksum uint32   `json:"newChecksum"`
-	NumMembers  int      `json:"numMembers"`
+	Changes             []Change `json:"changes"`
+	OldChecksum         uint32   `json:"oldChecksum"`
+	NewChecksum         uint32   `json:"newChecksum"`
+	NumMembers          int      `json:"numMembers"`
+	NumReachableMembers int      `json:"numReachableMembers"`
 }
 
 // A FullSyncEvent is sent when the disseminator's node issues changes a

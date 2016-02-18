@@ -66,21 +66,19 @@ func (m *memberlist) Checksum() uint32 {
 	return checksum
 }
 
-// computes membership checksum
-func (m *memberlist) ComputeChecksum() {
+// computes membership checksum. m.memberlist must be locked.
+func (m *memberlist) computeChecksum() {
 	startTime := time.Now()
-	m.members.Lock()
-	checksum := farm.Fingerprint32([]byte(m.GenChecksumString()))
+	checksum := farm.Fingerprint32([]byte(m.genChecksumString()))
 	m.members.checksum = checksum
-	m.members.Unlock()
 	m.node.emit(ChecksumComputeEvent{
 		Duration: time.Now().Sub(startTime),
 		Checksum: checksum,
 	})
 }
 
-// generates string to use when computing checksum
-func (m *memberlist) GenChecksumString() string {
+// generates string to use when computing checksum. m.memberlist must be locked.
+func (m *memberlist) genChecksumString() string {
 	var strings sort.StringSlice
 
 	for _, member := range m.members.list {
@@ -131,15 +129,13 @@ func (m *memberlist) Pingable(member Member) bool {
 
 }
 
-// returns the number of pingable members in the memberlist
-func (m *memberlist) NumPingableMembers() (n int) {
-	m.members.Lock()
+// returns the number of pingable members in the memberlist. m.members needs to be locked.
+func (m *memberlist) numPingableMembers() (n int) {
 	for _, member := range m.members.list {
 		if m.Pingable(*member) {
 			n++
 		}
 	}
-	m.members.Unlock()
 
 	return n
 }
@@ -266,20 +262,21 @@ func (m *memberlist) Update(changes []Change) (applied []Change) {
 		}
 	}
 
-	m.members.Unlock()
-
 	if len(applied) > 0 {
-		oldChecksum := m.Checksum()
-		m.ComputeChecksum()
+		oldChecksum := m.members.checksum
+		m.computeChecksum()
 		m.node.emit(MemberlistChangesAppliedEvent{
-			Changes:     applied,
-			OldChecksum: oldChecksum,
-			NewChecksum: m.Checksum(),
-			NumMembers:  m.NumMembers(),
+			Changes:             applied,
+			OldChecksum:         oldChecksum,
+			NewChecksum:         m.members.checksum,
+			NumMembers:          len(m.members.list),
+			NumReachableMembers: m.countReachableMembersNoLock(),
 		})
-		m.node.handleChanges(applied)
+		m.node.handleChanges(applied, m.numPingableMembers())
 		m.node.rollup.TrackUpdates(applied)
 	}
+
+	m.members.Unlock()
 
 	return applied
 }
@@ -370,16 +367,19 @@ func (m *memberlist) GetReachableMembers() []string {
 }
 
 func (m *memberlist) CountReachableMembers() int {
+	m.members.RLock()
+	defer m.members.RUnlock()
+	return m.countReachableMembersNoLock()
+}
+
+func (m *memberlist) countReachableMembersNoLock() int {
 	count := 0
 
-	m.members.RLock()
 	for _, member := range m.members.list {
 		if member.isReachable() {
 			count++
 		}
 	}
-	m.members.RUnlock()
-
 	return count
 }
 

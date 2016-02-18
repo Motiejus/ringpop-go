@@ -68,10 +68,9 @@ func newDisseminator(n *Node) *disseminator {
 	return d
 }
 
-func (d *disseminator) AdjustMaxPropagations() {
+func (d *disseminator) AdjustMaxPropagations(numPingable int) {
 	d.Lock()
 
-	numPingable := d.node.memberlist.NumPingableMembers()
 	prevMaxP := d.maxP
 
 	newMaxP := d.pFactor * int(math.Ceil(math.Log(float64(numPingable+1))/log10))
@@ -100,10 +99,20 @@ func (d *disseminator) HasChanges() bool {
 	return result
 }
 
+// Queue membership dissemination of all the members.
 func (d *disseminator) FullSync() (changes []Change) {
+	// We get memberlist before acquiring the lock on disseminator, because
+	// it has to be applied in that order to avoid deadlock.
+	// Other example of an operation which acquires both locks:
+	// memberlist.Update (holding the memberlist lock) ->
+	//  node.handleChanges ->
+	//  disseminator.recordChange (see below, acquiring the disseminator lock)
+
+	members := d.node.memberlist.GetMembers()
+
 	d.Lock()
 
-	for _, member := range d.node.memberlist.GetMembers() {
+	for _, member := range members {
 		changes = append(changes, Change{
 			Address:           member.Address,
 			Incarnation:       member.Incarnation,
@@ -216,6 +225,7 @@ func (d *disseminator) ClearChanges() {
 	d.Unlock()
 }
 
+// comes in having lock on memberlist
 func (d *disseminator) RecordChange(change Change) {
 	d.Lock()
 	d.changes[change.Address] = &pChange{change, 0}
